@@ -1,22 +1,30 @@
-const { LambdaClient, UpdateFunctionCodeCommand } = require("@aws-sdk/client-lambda");
+const { LambdaClient, UpdateFunctionCodeCommand, PublishVersionCommand } = require("@aws-sdk/client-lambda");
 const client = new LambdaClient({ region: process.env.REGION });
 
 exports.handler = async (event) => {
     try {
         const bucket = event.Records[0].s3.bucket.name;
-        const input = {
+        const updateInput = {
             FunctionName: process.env.FUNCTION_NAME,
             S3Bucket: bucket,
             S3Key: process.env.FILE_NAME
         };
+        const publishInput = {
+            FunctionName: process.env.FUNCTION_NAME
+        };
 
-        const command = new UpdateFunctionCodeCommand(input);
-        const response = await client.send(command);
+        const updateCommand = new UpdateFunctionCodeCommand(updateInput);
+        const updateResponse = await client.send(updateCommand);
+        console.log("UpdateFunctionCodeCommand status", updateResponse.$metadata.httpStatusCode);
+        console.log("state", updateResponse.State);
 
-        console.log("status", response.$metadata.httpStatusCode);
-        console.log("state", response.State);
-
-        return { status: response.$metadata.httpStatusCode, result: "ok", response }
+        if (process.env.PUBLISH) {
+            const publishCommand = new PublishVersionCommand(publishInput);
+            const publishResponse = await client.send(publishCommand);
+            console.log("PublishVersionCommand status", publishResponse.$metadata.httpStatusCode);
+            console.log("state", publishResponse.State);
+            return { status: publishResponse.$metadata.httpStatusCode, result: "ok", response: publishResponse }
+        } else return { status: updateResponse.$metadata.httpStatusCode, result: "ok", response: updateResponse }
     } catch (error) {
         return errorHandler(error);
     }
